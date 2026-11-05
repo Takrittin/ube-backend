@@ -2,13 +2,17 @@
 
 A runnable learning starter for the UBE Paper/Jumbo Bag inspection capstone. It is intentionally **not** a production-ready factory service.
 
+The sibling Next.js frontend now connects to these APIs. For Supabase PostgreSQL, schema migrations, frontend setup and the connected workflow, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md). Authentication remains FastAPI JWT; images remain in backend uploads.
+
 ## What is implemented
 
 - FastAPI REST endpoints and interactive Swagger docs (`/docs`)
 - Account login with signed JWT, Argon2 password hashes, and role checks (`inspector`, `qa`, `admin`)
 - Product and QR/Lot master data
 - Inspection creation, authenticated photo upload, and image retrieval
-- An **AI adapter** that returns `REVIEW` if no model is connected (this is NOT a real defect detector)
+- Real Roboflow Cloud pallet detection, with stored boxes, class labels and confidence
+- A no-login model test UI at `/test-ui/` for photo upload, boxes and confidence
+- Separate mock and external-service modes; object detection alone always requires manual quality review
 - Inspector final PASS/FAIL confirmation and a separate database record for AI and human decisions
 - Lot history and a simple QA dashboard summary
 - Local SQLite quick-start; optional PostgreSQL with Docker Compose
@@ -45,6 +49,13 @@ uvicorn app.main:app --reload
 
 Open http://127.0.0.1:8000/docs and http://127.0.0.1:8000/health.
 
+Open **http://127.0.0.1:8000/test-ui/** for the test interface. It is served by
+FastAPI itself; no Node.js, frontend install, second server or additional CORS
+configuration is needed. The model test UI needs no account or lot. For local
+Python runs, set `ENABLE_MODEL_TEST_UI=true`; Compose enables it automatically
+on its localhost-only port. Account seeding is only needed for the protected
+inspection workflow in Swagger.
+
 **Important:** Do not commit `.env`, your real company inspection photos, or the SQLite database to Git.
 
 ## 3. Run using Docker Compose + PostgreSQL
@@ -74,7 +85,7 @@ Never run `docker compose down -v` unless you intend to delete the PostgreSQL vo
 3. `POST /api/v1/lots` — e.g. `{"lot_code":"UBE-LOT-001", "product_id":"<copied-product-id>"}`.
 4. `GET /api/v1/lots/UBE-LOT-001` — test QR/lot lookup.
 5. `POST /api/v1/inspections` — body `{"lot_code":"UBE-LOT-001"}`; copy `inspection_id`.
-6. `POST /api/v1/inspections/{inspection_id}/image` — upload a real test JPG, PNG or WEBP photo under 10 MB. **Expect `REVIEW`, `confidence=0.0`, `mock-no-model-connected` until you connect your AI.**
+6. `POST /api/v1/inspections/{inspection_id}/image` — upload a test JPG, PNG or WEBP photo under 10 MiB and 25 megapixels. Real Roboflow mode returns detections inside `ai_result.measurements`; its quality decision is still `REVIEW`. Explicit mock mode returns confidence `0.0` and `mock-no-model-connected`.
 7. `POST /api/v1/inspections/{inspection_id}/confirm` — e.g. `{"decision":"PASS", "notes":"Inspected manually"}`.
 8. `GET /api/v1/inspections/{inspection_id}` — confirm AI and human records are separate.
 9. `GET /api/v1/lots/UBE-LOT-001/inspections` and `GET /api/v1/dashboard/summary` — check history and totals.
@@ -99,7 +110,9 @@ ube-backend-starter/
 │   │   ├── inspections.py
 │   │   └── dashboard.py
 │   └── services/
-│       └── ai.py             # Swap mock for local AI inference endpoint
+│       ├── ai.py             # Provider dispatch and safe configuration status
+│       └── roboflow.py       # Hosted pallet detection and response validation
+├── test-ui/                  # Plain HTML/CSS/JS test workspace
 ├── tests/smoke_flow.py      # End-to-end lightweight local smoke test
 ├── compose.yaml             # PostgreSQL + API
 ├── Dockerfile
@@ -107,31 +120,75 @@ ube-backend-starter/
 └── .env.example
 ```
 
-## 6. Connect your existing YOLO/Roboflow + OpenCV code
+## 6. Test real Roboflow pallet detection
 
-Your existing Google Colab notebook is useful for prototyping. For the application, extract the model-loading and prediction code into a **separate long-running Python inference service** (can be another FastAPI app) that accepts a multipart image and returns:
+Set these values in your local `.env` file (never commit your private key):
 
-```json
-{
-  "decision": "REVIEW",
-  "defect_type": null,
-  "confidence": 0.0,
-  "measurements": {},
-  "model_version": "your-model-version"
-}
+```dotenv
+AI_PROVIDER=roboflow
+ROBOFLOW_API_KEY=YOUR_PRIVATE_ROBOFLOW_KEY
+ROBOFLOW_MODEL_ID=krittin-wankundee/pallet-detection-zmufh-4-rfdetr-small-t1
+ROBOFLOW_CONFIDENCE=0.25
+ROBOFLOW_TARGET_CLASSES=pallet,pallet-detection,wooden-pallet
 ```
 
-This example payload is only an interface example; `REVIEW` is a safe placeholder, **not** a real model prediction.
+Restart the backend after changing settings, then open `/test-ui/`:
 
-Configure `AI_SERVICE_URL` in `.env`, e.g. `http://localhost:8001/predict` when running API and inference locally without Docker. If both run as Compose containers, use their Compose service name (e.g. `http://inference:8001/predict`), **not** `localhost`.
+1. Choose a test photo. No username, password, lot or product is required.
+2. Select **Run real detection**. One request is sent to Roboflow Cloud and may
+   consume inference credits; there are no automatic retries.
+3. Inspect class labels, confidence and bounding boxes. Green boxes match
+   `ROBOFLOW_TARGET_CLASSES`; blue boxes show other labels. A successful response
+   with no pallet labels means the model did not identify a target above the
+   configured threshold. It does not mean the request failed.
 
-`app/services/ai.py` uses that URL if provided; otherwise it deliberately returns manual review. Keep trained-model outputs (bounding boxes, confidence, measurements) as well as versioned **UBE-approved pass/fail tolerances**. Do not silently invent tolerances from sample pictures. Add a versioned backend rule engine to evaluate actual alignment/angle criteria when UBE supplies them.
+`GET /api/v1/model-test/status` and `POST /api/v1/model-test/detect` are
+no-login, opt-in endpoints for this local sandbox. They call Roboflow directly,
+regardless of the provider used by the protected inspection workflow. They do
+not write images, lots, inspections or decisions to storage. The returned image
+is orientation-normalized so its detection overlay matches the inferred pixels.
+The API key remains server-side. Model credentials/access are verified only when
+you intentionally run detection, not when the page loads.
 
-Using local model weights and OpenCV can avoid per-request Roboflow Cloud inference charges, but requires your own capable machine/server and attention to the model's license, distribution, and hardware needs.
+The sandbox defaults to disabled (`ENABLE_MODEL_TEST_UI=false`). Compose enables
+it for the existing `127.0.0.1:8000` binding. Leave the flag off on public
+installations. Requests from other browser origins are rejected. The existing
+login, inspection, lot and account APIs retain their authentication and records.
 
-## 7. What must be added before factory production use
+**Object detection does not certify quality.** This test does not evaluate
+alignment, tilt, wrapping, layer counts or product-quality Pass/Fail tolerances.
+Confirm the exact model ID and labels using Roboflow's Deploy tab if needed.
 
-- Alembic migration files (this starter uses SQLAlchemy `create_all()` to make initial local development easy)
+For full inspection API use, provider selection is unchanged: an explicit
+`AI_PROVIDER` takes precedence; otherwise a Roboflow key selects Roboflow, a
+custom `AI_SERVICE_URL` selects the external service, and no AI configuration
+selects mock mode. The separate `/api/v1/ai/status` remains authenticated.
+
+## 7. Automatic visible-stack inspection
+
+The protected inspection flow now runs **Roboflow layer/stack detection → local SAM 2.1 segmentation → OpenCV/NumPy geometry checks** automatically. No operator clicks or manual bag outlines are required. The no-login model sandbox above remains detection-only.
+
+```bash
+pip install -r requirements-sam2.txt
+python -m app.prepare_sam2
+python -m app.migrate
+```
+
+Set `AUTO_CHECK_ENABLED=true` and use `ROBOFLOW_MODEL_ID=krittin-wankundee/pallet-detection-zmufh-3-rfdetr-small-t1` (requires `paper-bag-stack` and `bag-layer` labels). Restart the backend. The preparation command downloads public official safetensors to ignored `.model-cache/` and records the model revision. Inspections use local weights without runtime downloads. See the [official SAM2 API](https://huggingface.co/docs/transformers/model_doc/sam2).
+
+The supplied notebook's provisional defaults are 8 layers, ≤3° whole-stack tilt and ≤4% adjacent-layer center/edge offset. They are versioned with each report, **not UBE-approved production tolerances**. Configure `AUTO_CHECK_EXPECTED_LAYERS`, `AUTO_CHECK_MAX_TILT_DEG`, `AUTO_CHECK_MAX_OFFSET_PERCENT`, and `AUTO_CHECK_CAMERA_ROLL_DEG` for the agreed product/camera setup.
+
+Reports persist in `ai_results.measurements.automatic_check` alongside original detector evidence. The UI displays layer boxes, the validated whole-stack outline, centerline, per-pair offsets and unavailable-check reasons. PASS requires every check; known measured failures produce FAIL even when another check is unavailable; otherwise insufficient evidence produces CANNOT_INSPECT/AI REVIEW. A human still confirms the final decision. Detection confidence is not calibrated quality confidence.
+
+The browser submits `image?background=true` (202), then polls the inspection. Failed jobs retain their image and allow an explicit owner/admin retry via `POST /inspections/{id}/analyze`; completed/running jobs do not trigger duplicate inference. Background work runs in the API process; interrupted jobs can be reclaimed after 15 minutes. Use a durable queue for production workloads. Retries can consume additional Roboflow credits. The original blocking upload API remains compatible.
+
+These image-space checks do not establish hidden bag interlocking, wrapping quality, physical 3D stability or perspective calibration. Previous manually annotated geometry remains available in history. Full Thai setup and limitations: [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
+
+A separate inference implementation can still be selected using `AI_PROVIDER=service` and `AI_SERVICE_URL`; explicit mock mode does not fabricate automatic checks.
+
+## 8. What must be added before factory production use
+
+- Additional versioned Alembic migrations for future schema changes (the initial migration now supports fresh databases and the original starter schema)
 - Database uniqueness/concurrency design and transaction strategy for simultaneous inspectors
 - Formal QA-approved tolerances and versioned rules; robust annotated-image storage
 - Image-type hardening, virus scanning as appropriate, lifecycle management, object storage/backups
@@ -140,12 +197,20 @@ Using local model weights and OpenCV can avoid per-request Roboflow Cloud infere
 - Inference timeouts, retry policy, idempotency, offline/failure workflow
 - Connection to real UBE lot/master-data sources and authorization requirements
 
-## 8. Local smoke test
+## 9. Offline tests
 
-Run outside any existing `.env` database in a disposable SQLite temp folder:
+Run from this repository's root. Tests explicitly isolate their configuration,
+database and uploads; they do not use your development database or call Roboflow:
 
 ```bash
 python -m tests.smoke_flow
+python -m unittest tests.test_roboflow -v
 ```
 
 This tests login, product creation, lot creation, image upload, mock AI, human confirmation, and the dashboard.
+
+The Roboflow suite uses HTTPX `MockTransport` to verify request encoding,
+credential handling, detection persistence, target-label filtering, errors,
+authentication, protected-image access and phone orientation. These are software
+tests, not a live inference or accuracy test. Live verification needs your own
+key, accessible model and an intentionally selected test photo.
