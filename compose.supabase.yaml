@@ -1,0 +1,12 @@
+# Standalone file: do not combine with compose.yaml (which overrides DATABASE_URL).
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./.model-cache:/app/.model-cache:ro

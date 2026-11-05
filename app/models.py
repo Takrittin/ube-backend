@@ -17,26 +17,36 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20))  # inspector | qa | admin
     is_active: Mapped[bool] = mapped_column(default=True)
+    full_name: Mapped[str] = mapped_column(String(120), default="", server_default="")
 
 class Product(Base):
     __tablename__ = "products"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     sku: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
+    bag_type: Mapped[str] = mapped_column(String(20), default="unknown", server_default="unknown")
 
 class Lot(Base):
     __tablename__ = "lots"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     lot_code: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     product_id: Mapped[str] = mapped_column(ForeignKey("products.id"))
+    production_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    quantity: Mapped[int] = mapped_column(default=0, server_default="0")
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 class Inspection(Base):
     __tablename__ = "inspections"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    lot_id: Mapped[str] = mapped_column(ForeignKey("lots.id"), index=True)
+    lot_id: Mapped[str | None] = mapped_column(ForeignKey("lots.id"), index=True, nullable=True)
     inspector_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pallet_code: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    material_code: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    qr_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 class InspectionImage(Base):
@@ -64,5 +74,16 @@ class FinalResult(Base):
     decided_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     decision: Mapped[str] = mapped_column(String(20))  # PASS | FAIL
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    defects: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class GeometryMeasurement(Base):
+    __tablename__ = "geometry_measurements"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    inspection_id: Mapped[str] = mapped_column(ForeignKey("inspections.id"), unique=True)
+    measured_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    annotation: Mapped[dict] = mapped_column(JSON)
+    report: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

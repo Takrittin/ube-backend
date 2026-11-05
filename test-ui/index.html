@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBE · Pallet model test</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js?v=model-test-1" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">U</span><span>UBE <span class="brand-light">/ Model test</span></span></a>
+    <div class="header-right"><span class="status-dot" id="connection-dot"></span><span id="connection">Checking backend…</span><a href="/docs" target="_blank" rel="noopener">API docs ↗</a></div>
+  </header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">LOCAL AI MODEL SANDBOX</p><h1>Does your model see the pallet?</h1><p class="subtitle">Choose a photo and inspect real Roboflow detections. No login or lot setup.</p></div><span class="pill">RF-DETR · Roboflow Cloud</span></section>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <div class="workspace">
+      <aside class="sidebar">
+        <section class="card model-card">
+          <div class="section-heading"><span class="live-dot"></span><h2>Your model</h2></div>
+          <span id="provider-badge" class="badge neutral">Checking configuration</span>
+          <p id="model-id" class="mono model-id"></p>
+          <p id="model-message" class="hint">Your API key stays on the backend.</p>
+          <p id="model-threshold" class="hint"></p>
+          <button id="check-ai" class="text-button">Refresh connection ↻</button>
+        </section>
+        <section class="card"><div class="section-heading"><span class="step">01</span><h2>Choose &amp; test</h2></div><p class="hint">1. Choose a clear photo.<br>2. Select Run real detection.<br>3. Review labels, confidence and boxes.</p><p class="hint">Photos and results are not saved to inspection history. Each click sends one request to Roboflow Cloud and may consume inference credits.</p></section>
+      </aside>
+      <div class="content">
+        <section class="card image-card">
+          <div class="section-heading"><span class="step">02</span><h2>Test photo</h2><span id="test-state" class="badge neutral">Choose a photo</span></div>
+          <div class="image-toolbar"><label class="file-button" for="photo">Choose a photo<input id="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><span id="file-name" class="hint">JPEG, PNG or WEBP · up to 10 MiB / 25 MP</span></div>
+          <div class="image-stage"><div id="empty-image"><span class="frame-icon">⌖</span><h3>Keep the full pallet in frame</h3><p>Good lighting and a clear view help the detector.</p></div><canvas id="preview" aria-label="Test photo with model detection boxes" role="img" hidden></canvas></div>
+          <div class="image-footer"><p class="hint"><span class="legend green"></span>Pallet label <span class="legend blue"></span>Other model label</p><div class="button-row"><button id="clear" class="secondary">Clear</button><button id="detect" class="primary" disabled>Run real detection →</button></div></div>
+          <p class="hint cloud-note">No automatic retries. No fabricated detections. A successful call with no boxes means nothing matched above the threshold.</p>
+        </section>
+        <section class="card" id="results-card">
+          <div class="section-heading"><span class="step">03</span><h2>Model results</h2></div>
+          <p id="results-empty" class="hint">Upload a photo and run detection to see whether your model identifies the pallet.</p>
+          <div id="results" hidden>
+            <div class="metrics"><div><span class="metric-label">Pallet identification</span><strong id="pallet-result">—</strong></div><div><span class="metric-label">Pallet confidence</span><strong id="pallet-confidence">—</strong></div><div><span class="metric-label">Objects returned</span><strong id="object-count">—</strong></div></div>
+            <p class="result-note" id="result-note"></p>
+            <div class="table-wrap"><table><thead><tr><th>Detected class</th><th>Confidence</th><th>Box center / size (px)</th></tr></thead><tbody id="detections"></tbody></table></div>
+            <p class="hint mono" id="result-model"></p>
+          </div>
+        </section>
+        <details class="card request-card"><summary>Response details <span class="hint">HTTP status &amp; model output · API key omitted</span></summary><pre id="request-log">No detection requests yet.</pre></details>
+      </div>
+    </div>
+    <footer>UBE MODEL TEST <span>Object detection only · Quality Pass/Fail is not evaluated.</span></footer>
+  </main>
+</body>
+</html>

@@ -2,7 +2,8 @@
 import os
 from sqlalchemy import select
 from app.config import JWT_SECRET_KEY  # ensure env configured
-from app.database import Base, engine, SessionLocal
+from app.database import SessionLocal
+from app.migrate import migrate
 from app.models import User
 from app.security import hash_password
 
@@ -12,7 +13,7 @@ def main():
     password = os.getenv("SEED_ADMIN_PASSWORD", "")
     if len(password) < 10 or "REPLACE_WITH" in password:
         raise SystemExit("Set SEED_ADMIN_PASSWORD (at least 10 characters) in .env first")
-    Base.metadata.create_all(engine)
+    migrate()
     with SessionLocal() as db:
         if db.scalar(select(User).where(User.username == username)):
             print(f"User {username!r} already exists; no changes made")

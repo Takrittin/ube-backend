@@ -20,10 +20,13 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://ube:${POSTGRES_PASSWORD}@db:5432/ube
       UPLOAD_DIR: /app/uploads
+      # No-login sandbox; this service is published only on localhost below.
+      ENABLE_MODEL_TEST_UI: "true"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./uploads:/app/uploads
+      - ./.model-cache:/app/.model-cache:ro
     depends_on:
       db:
         condition: service_healthy

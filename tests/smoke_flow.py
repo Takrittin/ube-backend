@@ -8,7 +8,9 @@ with tempfile.TemporaryDirectory() as folder:
     os.environ["DATABASE_URL"] = "sqlite:///" + folder + "/test.db"
     os.environ["JWT_SECRET_KEY"] = "test-only-very-long-secret-not-for-production"
     os.environ["UPLOAD_DIR"] = folder + "/uploads"
-    os.environ.pop("AI_SERVICE_URL", None)
+    os.environ["AI_SERVICE_URL"] = ""
+    os.environ["AI_PROVIDER"] = "mock"
+    os.environ["ROBOFLOW_API_KEY"] = ""
 
     from fastapi.testclient import TestClient
     from app.database import SessionLocal

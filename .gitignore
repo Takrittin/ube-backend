@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 *.db
 uploads/
+.model-cache/
+
+.DS_Store
