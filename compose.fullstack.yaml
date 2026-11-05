@@ -1,0 +1,29 @@
+# Run from ube-backend-starter; Supabase remains the hosted database.
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      UPLOAD_DIR: /app/uploads
+      SAM2_MODEL_DIR: /app/.model-cache/sam2.1-hiera-small
+      SAM2_DEVICE: cpu
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./.model-cache:/app/.model-cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+  web:
+    build: ../ube-frontend
+    environment:
+      BACKEND_API_URL: http://api:8000/api/v1
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
