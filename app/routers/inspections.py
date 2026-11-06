@@ -159,15 +159,26 @@ def confirm(inspection_id: str, payload: ConfirmRequest, db: Session = Depends(g
     inspection.status = "CONFIRMED"
     db.commit()
     return {"inspection_id": inspection.id, "status": inspection.status, "ai_decision": ai.decision,
-            "final_decision": final.decision, "overridden": overridden}
+            "final_decision": final.decision, "overridden": overridden,
+            "inspection": inspection_data(db, inspection)}
 
 def inspection_data(db: Session, inspection: Inspection):
-    lot = db.get(Lot, inspection.lot_id) if inspection.lot_id else None
-    ai = db.scalar(select(AIResult).where(AIResult.inspection_id == inspection.id))
-    final = db.scalar(select(FinalResult).where(FinalResult.inspection_id == inspection.id))
-    img = db.scalar(select(InspectionImage).where(InspectionImage.inspection_id == inspection.id))
-    inspector = db.get(User, inspection.inspector_id)
-    geometry = db.scalar(select(GeometryMeasurement).where(GeometryMeasurement.inspection_id == inspection.id))
+    row = db.execute(inspection_statement().where(Inspection.id == inspection.id)).one()
+    return serialize_inspection(*row)
+
+
+def inspection_statement():
+    # Related records are unique per inspection; preserve optional records with outer joins.
+    return (select(Inspection, Lot, AIResult, FinalResult, InspectionImage, User, GeometryMeasurement)
+            .outerjoin(Lot, Lot.id == Inspection.lot_id)
+            .outerjoin(AIResult, AIResult.inspection_id == Inspection.id)
+            .outerjoin(FinalResult, FinalResult.inspection_id == Inspection.id)
+            .outerjoin(InspectionImage, InspectionImage.inspection_id == Inspection.id)
+            .join(User, User.id == Inspection.inspector_id)
+            .outerjoin(GeometryMeasurement, GeometryMeasurement.inspection_id == Inspection.id))
+
+
+def serialize_inspection(inspection, lot, ai, final, img, inspector, geometry):
     return {
         "inspection_id": inspection.id, "lot_id": lot.id if lot else None, "lot_code": lot.lot_code if lot else None, "status": inspection.status,
         "pallet_code": inspection.pallet_code, "material_code": inspection.material_code, "qr_raw": inspection.qr_raw,
@@ -230,8 +241,9 @@ async def save_geometry(inspection_id: str, payload: GeometryRequest, db: Sessio
 @router.get("")
 def list_inspections(offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
                      db: Session = Depends(get_db), user: User = Depends(current_user)):
-    items = db.scalars(select(Inspection).order_by(Inspection.created_at.desc(), Inspection.id).offset(offset).limit(limit))
-    return [inspection_data(db, item) for item in items]
+    statement = (inspection_statement()
+                 .order_by(Inspection.created_at.desc(), Inspection.id).offset(offset).limit(limit))
+    return [serialize_inspection(*row) for row in db.execute(statement)]
 
 @router.get("/{inspection_id}")
 def get_inspection(inspection_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):

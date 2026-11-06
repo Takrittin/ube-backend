@@ -77,6 +77,10 @@ class ConnectedWorkflow(unittest.TestCase):
                            json={"decision": "PASS", "notes": "Reviewed by inspector"})
         self.assertEqual(confirmed.status_code, 200, confirmed.text)
         record = c.get("/api/v1/inspections?offset=0&limit=1", headers=h).json()[0]
+        saved = confirmed.json()["inspection"]
+        # SQLite reloads timestamps without offsets; both represent the same UTC instant.
+        saved["final_result"]["confirmed_at"] = saved["final_result"]["confirmed_at"].removesuffix("+00:00")
+        self.assertEqual(saved, record)
         self.assertEqual(record["pallet_code"], "P001")
         self.assertEqual(record["material_code"], "M001")
         self.assertEqual(record["qr_raw"], "INT-LOT001|M001")
