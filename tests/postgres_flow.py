@@ -36,9 +36,9 @@ def main():
                 assert db.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0001_inspection_schema"
                 # Re-running the SQL Editor migration is safe.
                 db.execute((backend / "supabase/migrations/202611030001_inspection_schema.sql").read_text())
-                for filename in ("202611030002_optional_inspection_lot.sql", "202611050003_human_defects.sql", "202611050004_geometry_measurements.sql", "202611050005_automatic_processing.sql"):
+                for filename in ("202611030002_optional_inspection_lot.sql", "202611050003_human_defects.sql", "202611050004_geometry_measurements.sql", "202611050005_automatic_processing.sql", "202611100006_user_directory.sql"):
                     db.execute((backend / "supabase/migrations" / filename).read_text())
-                assert db.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0005_automatic_processing"
+                assert db.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0006_user_directory"
             with psycopg.connect(base + "/legacy_test", autocommit=True) as db:
                 db.execute("CREATE TABLE users (id VARCHAR(36) PRIMARY KEY, username VARCHAR(80) NOT NULL UNIQUE, "
                            "password_hash VARCHAR(255) NOT NULL, role VARCHAR(20) NOT NULL, is_active BOOLEAN NOT NULL)")

@@ -202,7 +202,7 @@ class MigrationTests(unittest.TestCase):
                                             cwd=Path(__file__).resolve().parent.parent)
                     self.assertEqual(result.returncode, 0, result.stderr)
                 with sqlite3.connect(target) as db:
-                    self.assertEqual(db.execute("SELECT version_num FROM alembic_version").fetchone()[0], "0005_automatic_processing")
+                    self.assertEqual(db.execute("SELECT version_num FROM alembic_version").fetchone()[0], "0006_user_directory")
                     self.assertIn("qr_raw", [row[1] for row in db.execute("PRAGMA table_info(inspections)")])
                     if legacy:
                         self.assertEqual(db.execute("SELECT username, full_name FROM users").fetchone(), ("old-user", ""))

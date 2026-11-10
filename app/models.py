@@ -18,6 +18,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20))  # inspector | qa | admin
     is_active: Mapped[bool] = mapped_column(default=True)
     full_name: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    email: Mapped[str | None] = mapped_column(String(254), unique=True, index=True, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=True)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class Product(Base):
     __tablename__ = "products"

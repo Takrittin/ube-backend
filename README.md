@@ -182,6 +182,10 @@ Reports persist in `ai_results.measurements.automatic_check` alongside original 
 
 The browser submits `image?background=true` (202), then polls the inspection. Failed jobs retain their image and allow an explicit owner/admin retry via `POST /inspections/{id}/analyze`; completed/running jobs do not trigger duplicate inference. Background work runs in the API process; interrupted jobs can be reclaimed after 15 minutes. Use a durable queue for production workloads. Retries can consume additional Roboflow credits. The original blocking upload API remains compatible.
 
+Upload claims and result writes use short worker-thread transactions. The API releases its database connection before inference in both upload modes; concurrent submissions claim an inspection only once. A failed blocking upload restores the original draft/no-image behavior. Background failures retain their image for retry.
+
+History uses authenticated `GET /api/v1/inspections/page` with `offset`, `limit` (default 50, maximum 200), `search`, `decision` (`all`, `pass`, `fail`, `review`), `date_from`, `date_to`, `material`, and `q` (lot/pallet search). It returns `{items, total, offset, limit}`; the original list endpoint is unchanged. Dates are inclusive Asia/Bangkok calendar dates. `GET /api/v1/dashboard/analytics` accepts `date_from`, `date_to`, optional `material`/`q`, and returns database aggregates for the selected and equal-length previous periods, plus at most ten detailed recent records. Dashboard aggregation never downloads all inspection evidence into the API or browser. Five-topic check rates retain their existing unavailable semantics until the live API supplies those observations.
+
 These image-space checks do not establish hidden bag interlocking, wrapping quality, physical 3D stability or perspective calibration. Previous manually annotated geometry remains available in history. Full Thai setup and limitations: [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 
 A separate inference implementation can still be selected using `AI_PROVIDER=service` and `AI_SERVICE_URL`; explicit mock mode does not fabricate automatic checks.
@@ -205,7 +209,11 @@ database and uploads; they do not use your development database or call Roboflow
 ```bash
 python -m tests.smoke_flow
 python -m unittest tests.test_roboflow -v
+python -m unittest tests.test_inspection_async -v
+python -m unittest tests.test_inspection_queries -v
 ```
+
+Run test modules in separate processes as shown: each module initializes its own temporary database/configuration before importing the application.
 
 This tests login, product creation, lot creation, image upload, mock AI, human confirmation, and the dashboard.
 
@@ -214,3 +222,7 @@ credential handling, detection persistence, target-label filtering, errors,
 authentication, protected-image access and phone orientation. These are software
 tests, not a live inference or accuracy test. Live verification needs your own
 key, accessible model and an intentionally selected test photo.
+
+### Multiple inspection photos
+
+The upload endpoint accepts required multipart `file` plus up to three optional `files` parts (1–4 photos total). Every submitted photo is normalized, analyzed sequentially, and retained. Any FAIL makes the overall decision FAIL; otherwise any REVIEW makes it REVIEW; PASS requires all submitted photos to pass. Per-photo reports are stored in `measurements.image_results`; a single photo keeps the existing result format. Photo retrieval accepts `?sequence=1` through `4` and the inspection response lists its images. Additional normalized files use the primary stored path plus `.2`, `.3`, or `.4` and their format extension; keep these files together when backing up uploads. Manual geometry still applies to the first photo.

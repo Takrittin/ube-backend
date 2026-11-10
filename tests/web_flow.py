@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 from io import BytesIO
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -20,6 +21,13 @@ def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def bangkok_day(timestamp):
+    value = datetime.fromisoformat(timestamp)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone(timedelta(hours=7))).date().isoformat()
 
 
 def wait_ready(url, process):
@@ -93,6 +101,14 @@ def main(database_url=None):
                     assert history[0]["pallet_code"] == "P1"
                     assert history[0]["geometry_result"]["report"]["status"] == "REVIEW"
                     assert expect(c.get("/dashboard/summary")).json()["passed"] == 1
+                    page = expect(c.get("/inspections/page", params={"offset": 0, "limit": 1,
+                                  "search": "Web test bag", "decision": "pass"})).json()
+                    assert page["total"] == 1 and len(page["items"]) == 1, page
+                    assert page["items"][0]["inspection_id"] == identifier
+                    day = bangkok_day(history[0]["created_at"])
+                    analytics = expect(c.get("/dashboard/analytics", params={"date_from": day, "date_to": day})).json()
+                    assert analytics["inspected"] == 1 and analytics["currentPass"]["count"] == 1, analytics
+                    assert analytics["latest"][0]["inspection_id"] == identifier
                     unassigned = expect(c.post("/inspections", json={}), 201).json()["inspection_id"]
                     submitted = expect(c.post(f"/inspections/{unassigned}/image?background=true", files={"file": ("test.jpg", blob.getvalue(), "image/jpeg")}), 202).json()
                     assert submitted["status"] == "PROCESSING"
@@ -110,6 +126,11 @@ def main(database_url=None):
                     assert saved["lot_id"] is None and saved["lot_code"] is None
                     assert saved["status"] == "CONFIRMED"
                     assert saved["final_result"]["defects"] == ["ถุงสินค้าเสียหาย"]
+                    saved_day = bangkok_day(saved["created_at"])
+                    updated = expect(c.get("/dashboard/analytics", params={"date_from": min(day, saved_day),
+                                           "date_to": max(day, saved_day)})).json()
+                    assert updated["inspected"] == 2, updated
+                    assert updated["defects"] == [{"name": "ถุงสินค้าเสียหาย", "count": 1}], updated
                     user = expect(c.post("/users", json={"username": "web-inspector", "password": "web-test-password-123", "role": "inspector"}), 201).json()
                     expect(c.patch(f"/users/{user['id']}", json={"role": "qa"}))
                     expect(c.delete(f"/users/{user['id']}"), 204)

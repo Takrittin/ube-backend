@@ -1,9 +1,11 @@
+from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import FinalResult, Inspection, User, AIResult
-from app.security import require_roles
+from app.security import current_user, require_roles
+from app.services.inspection_queries import dashboard_analytics
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
@@ -16,3 +18,9 @@ def summary(db: Session = Depends(get_db), user: User = Depends(require_roles("q
     manual_reviews = db.scalar(select(func.count()).select_from(AIResult).where(AIResult.decision == "REVIEW"))
     return {"confirmed_inspections": confirmed, "passed": passed, "failed": failed,
             "overrides": overrides, "ai_manual_review_count": manual_reviews}
+
+
+@router.get("/analytics")
+def analytics(date_from: date, date_to: date, material: str = "", q: str = "",
+              db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return dashboard_analytics(db, date_from, date_to, material=material, q=q)

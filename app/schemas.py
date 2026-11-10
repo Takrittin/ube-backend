@@ -1,14 +1,28 @@
 from typing import Literal, Annotated
 from datetime import date
+import re
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
-class UserCreate(BaseModel):
+class UserEmail(BaseModel):
+    email: str | None = Field(default=None, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value):
+        value = value.strip().lower() if value else None
+        if value and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("Enter a valid email address")
+        return value or None
+
+
+class UserCreate(UserEmail):
     username: str = Field(min_length=3, max_length=80)
     password: str = Field(min_length=10, max_length=200)
     role: Literal["inspector", "qa", "admin"]
     full_name: str = Field(default="", max_length=120)
 
-class UserUpdate(BaseModel):
+class UserUpdate(UserEmail):
+    full_name: str | None = Field(default=None, min_length=1, max_length=120)
     role: Literal["inspector", "qa", "admin"] | None = None
     is_active: bool | None = None
 

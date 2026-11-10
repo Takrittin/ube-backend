@@ -35,7 +35,7 @@ uvicorn app.main:app --reload
 
 Migration สร้าง 7 ตารางของแอป และ `alembic_version` พร้อมเพิ่มคอลัมน์ใหม่ให้ฐานข้อมูล starter เดิมโดยไม่ลบข้อมูล ฐานข้อมูล PostgreSQL จะไม่สร้างตารางจากการเปิดเซิร์ฟเวอร์ ให้รัน migration ก่อนทุก deployment
 
-ทางเลือก: ใช้ SQL Editor รัน `supabase/migrations/202611030001_inspection_schema.sql` แล้วรัน `supabase/migrations/202611030002_optional_inspection_lot.sql` และ `supabase/migrations/202611050003_human_defects.sql` ตามลำดับ เพื่อสร้าง schema ล่าสุด แล้วรัน `python -m app.seed` เพื่อสร้างบัญชี อย่าสร้างบัญชีโดยใส่รหัสผ่านธรรมดาลงตาราง
+ทางเลือก: ใช้ SQL Editor รันไฟล์ใน `supabase/migrations/` ตามลำดับชื่อไฟล์ ตั้งแต่ `202611030001_inspection_schema.sql` จนถึง `202611100006_user_directory.sql` ให้ครบทั้ง 6 ไฟล์ เพื่อสร้าง schema ล่าสุด แล้วรัน `python -m app.seed` เพื่อสร้างบัญชี อย่าสร้างบัญชีโดยใส่รหัสผ่านธรรมดาลงตาราง
 
 Migration เปิด RLS และถอนสิทธิ์ Data API ของ `anon` / `authenticated` จากตารางแอป รวมถึงตารางผู้ใช้ที่เก็บ password hash การอ่านและเขียนจะผ่าน FastAPI ซึ่งเชื่อมต่อด้วย trusted server database role เท่านั้น หากภายหลังใช้ role ฐานข้อมูลที่จำกัดสิทธิ์ ต้องกำหนด grants/policies เพิ่มให้เหมาะสม
 
@@ -160,3 +160,10 @@ python -m tests.postgres_flow
 ```
 
 อ้างอิง API โมเดลทางการ: https://huggingface.co/docs/transformers/model_doc/sam2
+
+
+## User management directory
+
+ก่อนเปิด backend รุ่นนี้ ให้รัน `python -m app.migrate` เพื่อเพิ่ม `users.email`, `created_at`, `last_active_at` และ unique email index แบบไม่ลบข้อมูลเดิม หากใช้ SQL Editor ให้รัน migrations 0001–0005 ให้ครบตามลำดับ แล้วรัน `supabase/migrations/202611100006_user_directory.sql` บัญชีเก่าที่ไม่มีวันที่สร้างจะเก็บเป็น NULL และแสดง —; ไม่กำหนดวันที่ย้อนหลังแทนข้อมูลจริง
+
+หน้า Users ใช้ `GET /api/v1/users/page` สำหรับค้นหาชื่อ/username/email กรอง role/status และเรียง/แบ่งหน้า ส่วน `GET /users` เดิมยังคงรูปแบบเดิม Last active บันทึกตอน login และระหว่างใช้งานโดยจำกัดการเขียนหนึ่งครั้งต่อห้านาทีต่อบัญชี การปิดใช้งานยังเก็บประวัติการตรวจและสามารถเปิดบัญชีกลับได้ Admin เท่านั้นที่จัดการบัญชีได้
